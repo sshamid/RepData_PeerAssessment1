@@ -3,18 +3,84 @@
 
 ## Loading and preprocessing the data
 
-
+```{r}
+data <- read.csv("activity.csv")
+data2 <- data[complete.cases(data), 1:2]
+library(reshape2)
+melted_data <- melt(data2, id.vars="date")
+tdset <- dcast(melted_data, date ~ variable, sum)
+summary(tdset)
+```
 
 ## What is mean total number of steps taken per day?
 
-
-
+```{r}
+barplot(tdset$steps, names.arg = tdset$date, xlab = "date", ylab = "steps")
+```
+### mean number of steps taken per day
+```{r}
+mean(tdset$steps)
+```
+### median number of steps taken per day
+```{r}
+quantile(tdset$steps, probs=0.5)
+```
 ## What is the average daily activity pattern?
-
-
+```{r}
+data3 <- data[complete.cases(data), c("steps", "interval")]
+melted_data2 <- melt(data3, id.vars="interval")
+tdset2 <- dcast(melted_data2, interval ~ variable, mean)
+plot(tdset2, type = "l")
+```
+### Which 5-minute interval contains the maximum number of steps?
+```{r}
+tdset2[which(tdset2$steps==max(tdset2$steps)),]$interval
+```
 
 ## Imputing missing values
-
-
+### total number of missing values in the dataset
+```{r}
+sum(!complete.cases(data))
+```
+### filling missing NAs by the previously calculated mean
+```{r}
+newdata <- data
+newdata[is.na(newdata)] <- mean(tdset2$steps)
+melted_data3 <- melt(newdata[,1:2], id.vars="date")
+tdset3 <- dcast(melted_data3, date ~ variable, sum)
+head(tdset3)
+barplot(tdset3$steps, names.arg = tdset3$date, xlab = "date", ylab = "steps")
+```
+### mean number of steps taken per day after filling missing NAs
+```{r}
+mean(tdset3$steps)
+```
+### median number of steps taken per day after filling missing NAs
+```{r}
+quantile(tdset3$steps, probs=0.5)
+```
+The mean does not differ at all from the previous value but median does differ a little bit. So the impact of imputing missing data on the estimates of the total daily number of steps is negligibly small.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+### Creates a new factor variable with two levels – “weekday” and “weekend” 
+```{r}
+daysID <- function(date) {
+    if (weekdays(as.Date(date)) %in% c("Saturday", "Sunday")  ) {
+        "weekend"
+    } 
+    else {
+        "weekday"
+    }
+}
+newdata$daysID <- as.factor(sapply(newdata$date, daysID))
+tail(newdata)
+```
+```{r}
+### Panel plot containing a time series plot of the 5-minute interval 
+par(mfrow = c(2, 1))
+for (type in c("weekend", "weekday")) {
+    steps.type <- aggregate(steps ~ interval, data = newdata, subset = newdata$daysID == 
+        type, FUN = mean)
+    plot(steps.type, type = "l", main = type)
+}
+```
