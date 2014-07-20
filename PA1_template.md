@@ -27,13 +27,9 @@ summary(tdset)
 
 ```r
 library("ggplot2")
-p <- ggplot(tdset, aes(x=steps)) + geom_histogram(colour="white")
+p <- ggplot(tdset, aes(x=steps)) + geom_histogram(binwidth = diff(range(tdset$steps))/30, colour="white")
 p + labs(title='Histogram of number of steps taken daily\n',
        y='Count', x='Steps')
-```
-
-```
-## stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust this.
 ```
 
 ![plot of chunk unnamed-chunk-2](figure/unnamed-chunk-2.png) 
@@ -127,10 +123,6 @@ median(daily_imputed_data$steps)
 ```r
 p %+% daily_imputed_data +
   labs(title='Number of steps taken each day,\nafter imputing missing values')
-```
-
-```
-## stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust this.
 ```
 
 ![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11.png) 
