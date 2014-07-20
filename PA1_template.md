@@ -1,34 +1,39 @@
 # Reproducible Research: Peer Assessment 1
 
-
 ## Loading and preprocessing the data
 
 
 ```r
 data <- read.csv("activity.csv")
-data2 <- data[complete.cases(data), 1:2]
 library(reshape2)
-melted_data <- melt(data2, id.vars="date")
+melted_data <- melt(data, na.rm = TRUE, id.vars="date")
 tdset <- dcast(melted_data, date ~ variable, sum)
 summary(tdset)
 ```
 
 ```
-##          date        steps      
-##  2012-10-02: 1   Min.   :   41  
-##  2012-10-03: 1   1st Qu.: 8841  
-##  2012-10-04: 1   Median :10765  
-##  2012-10-05: 1   Mean   :10766  
-##  2012-10-06: 1   3rd Qu.:13294  
-##  2012-10-07: 1   Max.   :21194  
-##  (Other)   :47
+##          date        steps          interval     
+##  2012-10-01: 1   Min.   :    0   Min.   :339120  
+##  2012-10-02: 1   1st Qu.: 6778   1st Qu.:339120  
+##  2012-10-03: 1   Median :10395   Median :339120  
+##  2012-10-04: 1   Mean   : 9354   Mean   :339120  
+##  2012-10-05: 1   3rd Qu.:12811   3rd Qu.:339120  
+##  2012-10-06: 1   Max.   :21194   Max.   :339120  
+##  (Other)   :55
 ```
 
 ## What is mean total number of steps taken per day?
 
 
 ```r
-barplot(tdset$steps, names.arg = tdset$date, xlab = "date", ylab = "steps")
+library("ggplot2")
+p <- ggplot(tdset, aes(x=steps)) + geom_histogram(colour="white")
+p + labs(title='Histogram of number of steps taken daily\n',
+       y='Count', x='Steps')
+```
+
+```
+## stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust this.
 ```
 
 ![plot of chunk unnamed-chunk-2](figure/unnamed-chunk-2.png) 
@@ -39,7 +44,7 @@ mean(tdset$steps)
 ```
 
 ```
-## [1] 10766
+## [1] 9354
 ```
 ### median number of steps taken per day
 
@@ -49,22 +54,23 @@ quantile(tdset$steps, probs=0.5)
 
 ```
 ##   50% 
-## 10765
+## 10395
 ```
 ## What is the average daily activity pattern?
 
 ```r
-data3 <- data[complete.cases(data), c("steps", "interval")]
-melted_data2 <- melt(data3, id.vars="interval")
+melted_data2 <- melt(data[, c("steps", "interval")], na.rm = TRUE, id.vars="interval")
 tdset2 <- dcast(melted_data2, interval ~ variable, mean)
-plot(tdset2, type = "l")
+p1 <- ggplot(tdset2, aes(x=interval, y=steps)) + geom_line()
+p1 + labs(title='Time series plot of the 5-minute interval',
+         y='Average number of steps taken', x='Interval')
 ```
 
 ![plot of chunk unnamed-chunk-5](figure/unnamed-chunk-5.png) 
 ### Which 5-minute interval contains the maximum number of steps?
 
 ```r
-tdset2[which(tdset2$steps==max(tdset2$steps)),]$interval
+tdset2[which.max(tdset2$steps), ]$interval
 ```
 
 ```
@@ -81,51 +87,55 @@ sum(!complete.cases(data))
 ```
 ## [1] 2304
 ```
-### filling missing NAs by the previously calculated mean
+### filling missing NAs by the previously calculated mean for the 5-minute interval
 
 ```r
-newdata <- data
-newdata[is.na(newdata)] <- mean(tdset2$steps)
-melted_data3 <- melt(newdata[,1:2], id.vars="date")
-tdset3 <- dcast(melted_data3, date ~ variable, sum)
-head(tdset3)
+tdset2$imputed_steps <- floor(tdset2$steps)
+imputed_data <- merge(data, tdset2[,c('interval', 'imputed_steps')], by='interval')
+imputed_data$steps <- ifelse(is.na(imputed_data$steps),
+                                 imputed_data$imputed_steps,
+                                 imputed_data$steps)
+imputed_data$imputed_steps <- NULL
+sum(is.na(imputed_data))
 ```
 
 ```
-##         date steps
-## 1 2012-10-01 10766
-## 2 2012-10-02   126
-## 3 2012-10-03 11352
-## 4 2012-10-04 12116
-## 5 2012-10-05 13294
-## 6 2012-10-06 15420
+## [1] 0
 ```
-
-```r
-barplot(tdset3$steps, names.arg = tdset3$date, xlab = "date", ylab = "steps")
-```
-
-![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8.png) 
 ### mean number of steps taken per day after filling missing NAs
 
 ```r
-mean(tdset3$steps)
+melted_data3 <- melt(imputed_data, id.vars="date")
+daily_imputed_data <- dcast(melted_data3, date ~ variable, sum)
+mean(daily_imputed_data$steps)
 ```
 
 ```
-## [1] 10766
+## [1] 10750
 ```
 ### median number of steps taken per day after filling missing NAs
 
 ```r
-quantile(tdset3$steps, probs=0.5)
+median(daily_imputed_data$steps)
 ```
 
 ```
-##   50% 
-## 10766
+## [1] 10641
 ```
-The mean does not differ at all from the previous value but median does differ a little bit. So the impact of imputing missing data on the estimates of the total daily number of steps is negligibly small.
+### Replace the data in the original histogram with the imputed data
+
+```r
+p %+% daily_imputed_data +
+  labs(title='Number of steps taken each day,\nafter imputing missing values')
+```
+
+```
+## stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust this.
+```
+
+![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11.png) 
+
+The mean does not differ much from the previous value but median does differ a little bit. So the impact of imputing missing data on the estimates of the total daily number of steps is negligibly small.
 
 ## Are there differences in activity patterns between weekdays and weekends?
 ### Creates a new factor variable with two levels – “weekday” and “weekend” 
@@ -139,28 +149,25 @@ daysID <- function(date) {
         "weekday"
     }
 }
-newdata$daysID <- as.factor(sapply(newdata$date, daysID))
-tail(newdata)
+imputed_data$daysID <- as.factor(sapply(imputed_data$date, daysID))
+imputed_data$date <- NULL
+table(imputed_data$daysID)
 ```
 
 ```
-##       steps       date interval  daysID
-## 17563 37.38 2012-11-30     2330 weekday
-## 17564 37.38 2012-11-30     2335 weekday
-## 17565 37.38 2012-11-30     2340 weekday
-## 17566 37.38 2012-11-30     2345 weekday
-## 17567 37.38 2012-11-30     2350 weekday
-## 17568 37.38 2012-11-30     2355 weekday
+## 
+## weekday weekend 
+##   12960    4608
 ```
 
 ```r
 ### Panel plot containing a time series plot of the 5-minute interval 
 par(mfrow = c(2, 1))
 for (type in c("weekend", "weekday")) {
-    steps.type <- aggregate(steps ~ interval, data = newdata, subset = newdata$daysID == 
+    steps.type <- aggregate(steps ~ interval, data = imputed_data, subset = imputed_data$daysID == 
         type, FUN = mean)
     plot(steps.type, type = "l", main = type)
 }
 ```
 
-![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12.png) 
+![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13.png) 
